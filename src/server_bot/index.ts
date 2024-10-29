@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import TelegramBot from "node-telegram-bot-api";
-import { MessageResponse, Schedules } from "./types"; // Verifique se o caminho está correto
+import { MessageResponse, Schedules } from "./types";
 import { showMainMenu } from "./menu_main";
 import { sendToApi } from "../services";
 import { DateTime } from "luxon";
@@ -8,97 +8,90 @@ import axios from "axios";
 
 dotenv.config();
 
-// Substitua pelo seu ID de chat pessoal do Telegram
-// const personalChatId = process.env.PERSONAL_CHAT_ID;
+const token = process.env.CALENDLY_API_TOKEN;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
+const PHONE_ID = process.env.PHONE_ID;
 
-// Crie um bot que usa 'polling' para buscar novas atualizações
-export const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN as string, {
+if (!TELEGRAM_BOT_TOKEN || !token || !WHATSAPP_TOKEN || !PHONE_ID) {
+  throw new Error("Missing environment variables");
+}
+
+export const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, {
   polling: true,
 });
 
-// Função para agendar evento no Calendly
-const scheduleEventOnCalendly = async (
-  nome: string,
-  data: string,
-  horario: string
-): Promise<any> => {
-  const calendlyToken = process.env.CALENDLY_API_TOKEN; // Token de autenticação da API do Calendly
-
-  if (!calendlyToken) {
-    console.error("CALENDLY_API_TOKEN não está definido no ambiente.");
-    throw new Error("Token de autenticação não fornecido.");
-  }
-
-  // Montar a data e hora do evento
-  const startDateTime = DateTime.fromFormat(
-    `${data} ${horario}`,
-    "dd-MM-yyyy HH:mm"
-  ).toISO(); // Início do evento
-  const endDateTime = DateTime.fromFormat(
-    `${data} ${horario}`,
-    "dd-MM-yyyy HH:mm"
-  )
-    .plus({ hours: 1 })
-    .toISO(); // Fim do evento
-
-  // const eventDetails = {
-  //   event: {
-  //     name: `Aula com ${nome}`,
-  //     start_time: startDateTime,
-  //     end_time: endDateTime,
-  //     event_type: "https://api.calendly.com/event_types/1", // Substitua com o URI do tipo de evento correto
-  //     // Adicione outros parâmetros necessários aqui, como a URL de redirecionamento, etc.
-  //   },
-  // };
-  const eventDetails = {
-    event: {
-      name: `Aula com ${nome}`,
-      start_time: startDateTime,
-      end_time: endDateTime,
-      event_type: "https://api.calendly.com/event_types/1", // Substitua com o URI do tipo de evento correto
-    },
-    owner: process.env.URI_USER, // Substitua com o URI do usuário no Calendly
-    owner_type: "User", // Pode ser "User" ou "Team", dependendo do contexto
-    max_event_count: 1, // Define o número máximo de eventos que podem ser agendados
-  };
-
+// Função para enviar uma mensagem de texto pelo WhatsApp
+const sendMessage = async (to: string, message: string) => {
+  const url = `https://graph.facebook.com/v16.0/${PHONE_ID}/messages`;
   try {
     const response = await axios.post(
-      "https://api.calendly.com/scheduling_links",
-      eventDetails,
+      url,
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "text",
+        text: { body: message },
+      },
       {
         headers: {
-          Authorization: `Bearer ${calendlyToken}`,
+          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
           "Content-Type": "application/json",
         },
       }
     );
-
-    console.log("Evento agendado no Calendly!", response.data);
-    return response.data; // Retorne os dados do evento agendado
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      if (error.response) {
-        console.error(
-          "Erro ao agendar evento no Calendly:",
-          error.response.data
-        );
-      } else if (error.request) {
-        console.error(
-          "Erro ao agendar evento no Calendly: Sem resposta do servidor",
-          error.request
-        );
-      } else {
-        console.error("Erro ao agendar evento no Calendly:", error.message);
-      }
-    } else {
-      console.error("Erro inesperado:", error);
-    }
-    throw new Error("Erro ao agendar evento no Calendly.");
+    console.log("Mensagem enviada com sucesso:", response.data);
+  } catch (error: any) {
+    console.error(
+      "Erro ao enviar a mensagem:",
+      error.response?.data || error.message
+    );
   }
 };
 
-// Função para obter a resposta do usuário
+// Função para agendar o evento e notificar via WhatsApp
+const scheduleEventOnCalendly = async (
+  chatId: number,
+  name: string,
+  date: string,
+  email: string,
+  whattsapp: string,
+  time: string
+) => {
+  try {
+    const schedules: Schedules = {
+      name: `Aula com ${name}`,
+      email,
+      date,
+      time,
+      client: chatId,
+    };
+
+    await sendToApi("http://localhost:5000/agendamentos", { schedules });
+
+    // const phoneNumber = "whatsapp:+5511977943720"; // Número do aluno
+    // const messageText = `Olá ${name}! Você tem uma aula agendada para ${date}, às ${time}. Posso confirmar sua presença? Endereço: Al. Prof. Lucas Nogueira Garcez 3565, Atibaia, SP. Caso não consiga comparecer, entre em contato no WhatsApp (11)97794-3720 para efetuar o cancelamento obrigado.`;
+
+    const personalNumber = "whatsapp:+5511977943720"; // Número do personal
+    const messageTextNotifications = `Olá Personal! Você tem uma aula agendada para hoje dia ${date} às ${time} com o aluno ${name}. Caso não consiga atender entre contato no whattsapp: +55${whattsapp} para efetuar o cancelamento.`;
+
+    // await sendMessage(phoneNumber, messageText);
+
+    // Envia a notificação ao personal apenas se o evento é hoje
+    const today = DateTime.now().toFormat("dd-MM-yyyy");
+    if (date === today) {
+      await sendMessage(personalNumber, messageTextNotifications);
+    }
+  } catch (error) {
+    console.error("Erro ao criar agendamento:", error);
+    bot.sendMessage(
+      chatId,
+      "Houve um erro ao criar seu agendamento. Por favor, tente novamente."
+    );
+  }
+};
+
+// Função para obter resposta do usuário
 const getMessageResponse = async (
   chatId: number,
   question: string
@@ -106,26 +99,22 @@ const getMessageResponse = async (
   bot.sendMessage(chatId, question);
   return new Promise((resolve) => {
     bot.once("message", (response) => {
-      resolve({ chatId, text: response.text || "" }); // Lidar com caso onde o texto pode ser indefinido
+      resolve({ chatId, text: response.text || "" });
     });
   });
 };
 
-// Evento quando o bot recebe uma mensagem
+// Manipulador de eventos de mensagens recebidas
 bot.on("message", (msg) => {
   const chatId = msg.chat.id;
-
-  // Verifique se msg.text está definido e lide com cumprimentos
   if (msg.text && ["oi", "ola", "olá"].includes(msg.text.toLowerCase())) {
     showMainMenu(chatId);
   }
 });
 
-console.log("Bot iniciado...");
-
-// Evento para tratar ações de callback
+// Manipulador para ações de callback
 bot.on("callback_query", async (callbackQuery) => {
-  const chatId = callbackQuery.message!.chat.id;
+  const chatId = callbackQuery.message?.chat.id;
   const action = callbackQuery.data;
 
   if (action === "agendar") {
@@ -134,21 +123,25 @@ bot.on("callback_query", async (callbackQuery) => {
         chatId,
         "Informe seu nome completo"
       );
-      const { text: data } = await getMessageResponse(
+      const { text: email } = await getMessageResponse(
+        chatId,
+        "Informe seu e-mail"
+      );
+      const { text: whatsapp } = await getMessageResponse(
+        chatId,
+        "Informe seu número de whatsapp (ex: 11 94444-4444)"
+      );
+      const { text: date } = await getMessageResponse(
         chatId,
         "Informe uma data válida (ex: 30-10-2024)"
       );
-      const { text: horario } = await getMessageResponse(
+      const { text: time } = await getMessageResponse(
         chatId,
         "Informe um horário válido entre 08:00 às 22:00 (ex: 15:00)"
       );
 
-      // Validação da data e hora
-      const isDateValid = DateTime.fromFormat(data, "dd-MM-yyyy").isValid;
-      const isTimeValid =
-        /^\d{2}:\d{2}$/.test(horario) &&
-        horario >= "08:00" &&
-        horario <= "22:00";
+      const isDateValid = DateTime.fromFormat(date, "dd-MM-yyyy").isValid;
+      const isTimeValid = /^\d{2}:\d{2}$/.test(time);
 
       if (!isDateValid || !isTimeValid) {
         bot.sendMessage(chatId, "Data ou horário inválidos. Tente novamente.");
@@ -156,7 +149,7 @@ bot.on("callback_query", async (callbackQuery) => {
       }
 
       const selectedDateTime = DateTime.fromFormat(
-        `${data} ${horario}`,
+        `${date} ${time}`,
         "dd-MM-yyyy HH:mm"
       );
       const now = DateTime.now();
@@ -173,36 +166,12 @@ bot.on("callback_query", async (callbackQuery) => {
         return showMainMenu(chatId);
       }
 
-      const schedules: Schedules = {
-        name: nome,
-        data: data,
-        time: horario,
-        client: chatId, // Assumindo que chatId é o identificador do cliente
-      };
+      await scheduleEventOnCalendly(chatId, nome, date, email, whatsapp, time);
 
-      const apiResponse = await sendToApi(
-        "http://localhost:5000/agendamentos",
-        {
-          agend: schedules,
-        }
+      bot.sendMessage(
+        chatId,
+        `${nome}, sua aula foi agendada para ${date} às ${time}! Endereço: Al. Prof. Lucas Nogueira Garcez 3565, Atibaia, SP.`
       );
-
-      if (apiResponse) {
-        const calendlyResponse = await scheduleEventOnCalendly(
-          nome,
-          data,
-          horario
-        );
-        if (calendlyResponse) {
-          bot.sendMessage(
-            chatId,
-            `${nome}, sua aula foi agendada para ${data} às ${horario}!`
-          );
-        }
-      } else {
-        bot.sendMessage(chatId, "Erro ao agendar aula. Tente novamente.");
-      }
-
       showMainMenu(chatId);
     } catch (error) {
       console.error("Erro ao processar agendamento:", error);
@@ -214,3 +183,5 @@ bot.on("callback_query", async (callbackQuery) => {
     }
   }
 });
+
+console.log("Bot iniciado...");

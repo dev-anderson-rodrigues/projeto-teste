@@ -13,7 +13,8 @@ export type MessageResponse = {
 
 export type Schedules = {
   name: string;
-  data: string;
+  email?: string;
+  date: string;
   time: string;
   client: number;
 };
