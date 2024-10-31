@@ -8,7 +8,7 @@ import { verificarAgendamentos } from "./notifications/sendMessage_Email";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3005;
 
 // Middleware to process request body
 app.use(bodyParser.json());
@@ -28,7 +28,7 @@ app.post(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
 
 // Define the webhook on Telegram
 const setWebhook = async () => {
-  const url = `https://fd82-2804-868-d050-7741-4816-ed2-4fe3-b8ed.ngrok-free.app/webhook/${process.env.TELEGRAM_BOT_TOKEN}`; // Update with your actual domain
+  const url = `https://large-baboons-hear.loca.lt/webhook/${process.env.TELEGRAM_BOT_TOKEN}`; // Update with your actual domain
   try {
     await bot.setWebHook(url);
   } catch (error) {

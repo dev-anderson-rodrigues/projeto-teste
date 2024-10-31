@@ -20,7 +20,7 @@ if (!TELEGRAM_BOT_TOKEN || !WHATSAPP_TOKEN || !PHONE_ID) {
 }
 
 // Initialize the bot with polling: false
-export const bot = new TelegramBot(TELEGRAM_BOT_TOKEN);
+export const bot = new TelegramBot(TELEGRAM_BOT_TOKEN || "");
 
 // Event handler for received messages
 bot.on("message", (msg) => {
@@ -54,14 +54,14 @@ const scheduleEventOnCalendly = async (
 ) => {
   try {
     const schedules: Schedule = {
-      name: `Aula com ${name}`,
+      name,
       email,
       date,
       time,
       client: chatId,
     };
 
-    await sendToApi("http://localhost:5001/agendamentos", { schedules });
+    await sendToApi("http://localhost:5000/agendamentos", { schedules });
 
     const personalNumber = "whatsapp:+5511977943720";
     const messageTextNotifications = `Olá Personal! Você tem uma aula agendada para hoje, dia ${date} às ${time} com o aluno ${name}. Caso não consiga atender, entre em contato no WhatsApp: +55${whatsapp} para cancelar.`;

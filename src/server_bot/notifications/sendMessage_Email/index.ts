@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 const VAR_EMAIL = process.env.EMAIL_USER;
-const VAR_PASS = process.env.EMAIL_PASS;
+const VAR_PASS = process.env.VAR_PASS;
 
 if (!VAR_EMAIL || !VAR_PASS) {
   throw new Error("Missing environment variables");
@@ -17,48 +17,43 @@ export const verificarAgendamentos = async () => {
   const dataAtual = new Date();
   const dataLimite = new Date(dataAtual.getTime() + 24 * 60 * 60 * 1000); // Próximas 24 horas
 
-  const startDate = dataAtual
-    .toISOString()
-    .slice(0, 10)
-    .split("-")
-    .reverse()
-    .join("-");
-  const endDate = dataLimite
-    .toISOString()
-    .slice(0, 10)
-    .split("-")
-    .reverse()
-    .join("-");
+  const startDate = dataAtual.toISOString().split("T")[0];
+  const endDate = dataLimite.toISOString().split("T")[0];
 
   try {
     const response = await axios.get<Schedules>(
-      `http://localhost:5000/agendamentos?date=${startDate}&date=${endDate}`
+      `http://localhost:5000/agendamentos?startDate=${startDate}&endDate=${endDate}`
     );
 
     const schedules = response.data;
 
-    // Verifica se `schedules` é um array antes de aplicar `.filter`
+    // // Verifica se `schedules` é um array antes de aplicar `.filter`
     if (!Array.isArray(schedules)) {
       console.error("Formato inesperado de dados:", schedules);
       return;
     }
 
-    // Filtra agendamentos válidos para as próximas 24 horas
-    const upcomingSchedules = schedules.filter(
-      (schedule) => schedule.schedules.email !== "example@example.com"
-    );
+    // Filtro para garantir que apenas datas futuras dentro das próximas 24 horas sejam selecionadas
+    const upcomingSchedules = schedules.filter((schedule) => {
+      const scheduleDate = new Date(schedule.schedules.date);
+      return (
+        scheduleDate >= dataAtual &&
+        scheduleDate <= dataLimite &&
+        schedule.schedules.email !== "example@example.com"
+      );
+    });
 
     if (upcomingSchedules.length === 0) {
       console.log("Nenhum agendamento nas próximas 24 horas");
       return;
     }
 
-    // Envia notificações por e-mail para cada agendamento
+    // // Envia notificações por e-mail para cada agendamento
     const emailPromises = upcomingSchedules.map((schedule) =>
       sendEmailNotification(
         schedule.schedules.email || "example@example.com",
         "Lembrete de Agendamento",
-        `Olá, ${schedule.schedules.name}! Lembrete do seu agendamento em ${schedule.schedules.date} às ${schedule.schedules.time}.`
+        `Olá, ${schedule.schedules.name}! Este é um lembrete do seu agendamento em ${schedule.schedules.date} às ${schedule.schedules.time}, seu personal estará no aguardo. Caso não consiga comparecer peço que nos avise com pelomenos 12 horas de antecedência!`
       )
     );
     await Promise.all(emailPromises);
@@ -80,10 +75,12 @@ export const sendEmailNotification = async (
 ) => {
   try {
     const transporter = nodemailer.createTransport({
-      service: "Gmail",
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
       auth: {
-        user: VAR_EMAIL, // Seu e-mail
-        pass: VAR_PASS, // Sua senha ou app password
+        user: VAR_EMAIL,
+        pass: VAR_PASS,
       },
     });
 
