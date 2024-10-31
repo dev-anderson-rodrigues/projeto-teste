@@ -11,10 +11,15 @@ export type MessageResponse = {
   text: string | undefined;
 };
 
-export type Schedules = {
+export type Schedule = {
   name: string;
   email?: string;
   date: string;
   time: string;
   client: number;
 };
+
+export type Schedules = {
+  id: string;
+  schedules: Schedule; // Diretamente associando a um Schedule
+}[];
