@@ -23,3 +23,18 @@ export type Schedules = {
   id: string;
   schedules: Schedule; // Diretamente associando a um Schedule
 }[];
+export type Availability = {
+  id: string;
+  day: number | undefined;
+  available: boolean;
+  timeSlot: [
+    {
+      start: string;
+      end: string;
+    },
+    {
+      start: string;
+      end: string;
+    }
+  ];
+};

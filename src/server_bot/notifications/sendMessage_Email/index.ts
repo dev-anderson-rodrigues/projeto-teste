@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 const VAR_EMAIL = process.env.EMAIL_USER;
-const VAR_PASS = process.env.VAR_PASS;
+const VAR_PASS = process.env.EMAIL_PASS;
 
 if (!VAR_EMAIL || !VAR_PASS) {
   throw new Error("Missing environment variables");

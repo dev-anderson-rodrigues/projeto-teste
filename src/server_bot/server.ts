@@ -2,46 +2,59 @@ import express from "express";
 import bodyParser from "body-parser";
 import TelegramBot from "node-telegram-bot-api";
 import dotenv from "dotenv";
-import { bot } from "./index"; // Import the bot instance from index.ts
+import { bot } from "./index"; // Importar a instância do bot de index.ts
 import { verificarAgendamentos } from "./notifications/sendMessage_Email";
+import localtunnel from "localtunnel";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3005;
 
-// Middleware to process request body
+// Middleware para processar o corpo da requisição
 app.use(bodyParser.json());
 verificarAgendamentos();
 
-// Webhook configuration
+// Configuração do webhook
 app.post(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
   const update = req.body;
   try {
     bot.processUpdate(update);
-    res.sendStatus(200); // Respond with 200 OK
+    res.sendStatus(200); // Responde com 200 OK
   } catch (error) {
     console.error("Error processing update:", error);
-    res.sendStatus(500); // Respond with 500 Internal Server Error
+    res.sendStatus(500); // Responde com 500 Internal Server Error
   }
 });
 
-// Define the webhook on Telegram
-const setWebhook = async () => {
-  const url = `https://large-baboons-hear.loca.lt/webhook/${process.env.TELEGRAM_BOT_TOKEN}`; // Update with your actual domain
+// Definir o webhook no Telegram
+const setWebhook = async (tunnelUrl) => {
+  const url = `${tunnelUrl}/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
   try {
     await bot.setWebHook(url);
+    console.log(`Webhook set to ${url}`);
   } catch (error) {
     console.error("Error setting webhook:", error);
   }
 };
 
-// Start the server
+// Iniciar o servidor
 const startServer = async () => {
   try {
-    app.listen(PORT, async () => {
+    const server = app.listen(PORT, async () => {
       console.log(`Server running on port ${PORT}`);
-      await setWebhook();
+
+      // Criar túnel LocalTunnel
+      const tunnel = await localtunnel({ port: PORT });
+      console.log(`LocalTunnel URL: ${tunnel.url}`);
+
+      // Definir o webhook
+      await setWebhook(tunnel.url);
+
+      // Evento para fechar o túnel ao encerrar o servidor
+      tunnel.on("close", () => {
+        console.log("LocalTunnel closed");
+      });
     });
   } catch (error) {
     console.error("Error starting server:", error);
@@ -50,7 +63,7 @@ const startServer = async () => {
 
 startServer();
 
-// Graceful shutdown
+// Encerramento gracioso
 const shutdown = async () => {
   await bot.deleteWebHook();
   console.log("Webhook deleted and server shutting down.");
