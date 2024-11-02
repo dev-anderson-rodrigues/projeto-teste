@@ -1,35 +1,19 @@
-import axios from "axios";
-import { Availability } from "./types";
-
-const checkDayAvailability = async (date: string): Promise<boolean> => {
-  try {
-    // Faz a requisição e espera a resposta da API
-    const availabilityResponse = await axios.get(
-      "http://localhost:5000/availability"
-    );
-    const availableSlots: Availability[] = availabilityResponse.data;
-
-    const dayOfTheWeek = new Date(date).getDay();
-    const dayAvailability = availableSlots.find(
-      (item) => Array.isArray(item.day) && item.day.includes(dayOfTheWeek)
-    );
-
-    console.log("dayAvailability:", dayAvailability);
-    console.log("dayOfTheWeek:", dayOfTheWeek);
-
-    if (!dayAvailability || !Array.isArray(dayAvailability.timeSlot)) {
-      console.error(
-        "Nenhuma disponibilidade de horário válida encontrada para o dia."
-      );
-      return false;
-    }
-
-    // Se chegar aqui, significa que `dayAvailability` e `timeSlot` estão disponíveis
-    return true;
-  } catch (error) {
-    console.error("Erro ao verificar disponibilidade:", error);
-    return false;
-  }
+import { sendToApiGet } from "../services";
+import { Schedules } from "./types";
+const schedules = {
+  name: "Anderson Rodrigues",
+  client: 1154098884,
+  email: "andersoncassio2008@gmail.com",
 };
-const date = "01-11-2024";
-checkDayAvailability(date);
+const response = sendToApiGet("http://localhost:5000/agendamentos", {
+  schedules,
+}).then(async (response: Schedules) => {
+  const data = await response.filter(
+    (r) =>
+      (r.schedules.name.toLowerCase() === schedules.name &&
+        r.schedules.client === schedules.client) ||
+      (r.schedules.email.toLowerCase() === schedules.email &&
+        r.schedules.client === schedules.client)
+  );
+  console.log(data);
+});

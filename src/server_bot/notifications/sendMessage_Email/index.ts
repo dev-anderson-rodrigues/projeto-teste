@@ -35,6 +35,10 @@ export const verificarAgendamentos = async () => {
 
     // Filtro para garantir que apenas datas futuras dentro das próximas 24 horas sejam selecionadas
     const upcomingSchedules = schedules.filter((schedule) => {
+      // Verifica se `schedule` e `schedule.schedules` existem
+      if (!schedule || !schedule.schedules) {
+        return false;
+      }
       const scheduleDate = new Date(schedule.schedules.date);
       return (
         scheduleDate >= dataAtual &&

@@ -20,3 +20,12 @@ export const sendToApiGet = async (url: string, data?: any) => {
     return null; // Em caso de erro, retorne null
   }
 };
+export const sendToApiPut = async (url: string, data?: any) => {
+  try {
+    const response = await axios.put(url, data);
+    return response.data; // Retorna os dados da resposta
+  } catch (error) {
+    console.error("Erro ao atualizar dados na API:", error);
+    return null; // Em caso de erro, retorne null
+  }
+};

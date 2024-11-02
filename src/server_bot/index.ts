@@ -1,11 +1,11 @@
 import * as Yup from "yup";
 import dotenv from "dotenv";
 import TelegramBot from "node-telegram-bot-api";
-import { Availability, MessageResponse, Schedule } from "./types";
+import { Availability, MessageResponse, Schedule, Schedules } from "./types";
 import { showMainMenu } from "./menu_main";
-import { sendToApiPost, sendToApiGet } from "../services";
+import { sendToApiPost, sendToApiGet, sendToApiPut } from "../services";
 import { DateTime } from "luxon";
-import { scheduleSchema } from "../validations";
+import { reschedulingSchema, scheduleSchema } from "../validations";
 import { sendMessageNotificationWhats } from "./notifications/sendMessage_Whats";
 import axios from "axios";
 // import { verificarAgendamentos } from "./notifications/sendMessage_Email";
@@ -140,6 +140,7 @@ const scheduleEventOnCalendly = async (
       email,
       date,
       time,
+      whatsapp,
       client: chatId,
     };
 
@@ -226,6 +227,126 @@ bot.on("callback_query", async (callbackQuery) => {
       bot.sendMessage(
         chatId,
         "Houve um erro ao processar seu agendamento. Tente novamente."
+      );
+      showMainMenu(chatId);
+    }
+  }
+});
+
+// Manipulador para ações de callback
+bot.on("callback_query", async (callbackQuery) => {
+  const today = DateTime.now().toFormat("dd-MM-yyyy");
+  const chatId = callbackQuery.message?.chat.id;
+  const action = callbackQuery.data;
+
+  if (action === "reagendar") {
+    try {
+      // Função para obter e validar um campo específico
+      const getValidatedResponse = async (
+        question: string,
+        field: keyof Yup.InferType<typeof reschedulingSchema>
+      ) => {
+        let response;
+        while (true) {
+          response = (await getMessageResponse(chatId, question)).text;
+          try {
+            await reschedulingSchema.validateAt(field, { [field]: response });
+            break; // Validação passou, sai do loop
+          } catch (error) {
+            if (error instanceof Yup.ValidationError) {
+              bot.sendMessage(chatId, error.message); // Envia a mensagem de erro específico para o campo
+            }
+          }
+        }
+        return response;
+      };
+
+      const name = await getValidatedResponse(
+        "Digite nome e sobrenome cadastrado no agendamento!",
+        "name"
+      );
+      const email = await getValidatedResponse(
+        "Digite email cadastrado no agendamento! (ex: example@example.com)",
+        "email"
+      );
+      const schedules = {
+        name,
+        client: chatId,
+        email,
+      };
+      const apiResponse = await sendToApiGet(
+        "http://localhost:5000/agendamentos",
+        { schedules }
+      );
+      // Filtrando os resultados
+      const matchingSchedule = apiResponse.filter(
+        (r) =>
+          (r.schedules.name.toLowerCase() === schedules.name.toLowerCase() &&
+            r.schedules.client === schedules.client) ||
+          (r.schedules.email.toLowerCase() === schedules.email.toLowerCase() &&
+            r.schedules.client === schedules.client)
+      );
+      // Pergunta e valida cada campo individualmente
+      if (matchingSchedule.length > 0) {
+        // Obtém o ID do agendamento correspondente
+        const existingSchedule = matchingSchedule[0];
+        const scheduleId = existingSchedule.id;
+
+        // Pergunta e valida nova data e horário
+        const date = await getValidatedResponse(
+          `Informe a nova data! (ex: ${today})`,
+          "date"
+        );
+        const time = await getValidatedResponse(
+          "Informe um horário válido entre 08:00 e 22:00 (ex: 15:00)",
+          "time"
+        );
+        // Verifica disponibilidade do novo horário
+        const available = await checkAvailability(date, time);
+        if (!available) {
+          bot.sendMessage(
+            chatId,
+            "Infelizmente, o horário solicitado está indisponível. Por favor, escolha outro horário."
+          );
+          return;
+        }
+
+        const updatedData = {
+          name: existingSchedule.schedules.name,
+          email: existingSchedule.schedules.email,
+          date,
+          time,
+          whatsapp: existingSchedule.schedules.whatsapp,
+          client: existingSchedule.schedules.client,
+        };
+        try {
+          console.log("objeto update" + updatedData);
+          console.log(existingSchedule.schedules.name);
+
+          const response = await sendToApiPut(
+            `http://localhost:5000/agendamentos/${scheduleId}`,
+            updatedData
+          );
+          console.log("Atualização bem-sucedida:", response.data);
+          bot.sendMessage(chatId, "Reagendamento realizado com sucesso!");
+          return response;
+        } catch (error) {
+          console.error("Erro ao atualizar o agendamento:", error);
+          throw error; // Propague o erro para tratamento posterior, se necessário
+        }
+      } else {
+        bot.sendMessage(
+          chatId,
+          "Nenhum agendamento correspondente foi encontrado."
+        );
+      }
+
+      showMainMenu(chatId);
+    } catch (error) {
+      console.error("Erro ao processar reagendamento:", error);
+      bot.sendMessage(
+        chatId,
+        "Houve um erro ao processar seu reagendamento. Tente novamente."
       );
       showMainMenu(chatId);
     }

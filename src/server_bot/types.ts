@@ -14,6 +14,7 @@ export type MessageResponse = {
 export type Schedule = {
   name: string;
   email?: string;
+  whatsapp: string;
   date: string;
   time: string;
   client: number;
